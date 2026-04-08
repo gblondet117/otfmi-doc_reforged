@@ -90,23 +90,15 @@ class _FMUBaseFunction:
             if difference:
                 raise pyfmi.common.io.VariableNotFoundError(", ".join(difference))
 
+            input_causality_map = {"1.0": pyfmi.fmi.FMI_INPUT,
+                                   "2.0": pyfmi.fmi.FMI2_INPUT}
+            accepted_causality = [input_causality_map[self._model.get_version()]]
+            if self._model.get_version() == "2.0" and not self._field_input:
+                accepted_causality.append(pyfmi.fmi.FMI2_PARAMETER)
             for name in inputs_fmu:
-                if (
-                    self._model.get_version() == "2.0"
-                    and not causality[name]
-                    in [pyfmi.fmi.FMI2_PARAMETER, pyfmi.fmi.FMI2_INPUT]
-                ) or (
-                    self._model.get_version() == "1.0"
-                    and causality[name] != pyfmi.fmi.FMI_INPUT
-                ):
-                    raise ValueError(
-                        'Variable "'
-                        + name
-                        + '" cannot be used as a function input (causality '
-                        + fmi.get_causality_str(self._model, name)
-                        + ")"
-                    )
-
+                if not causality[name] in accepted_causality:
+                    raise ValueError(f"Variable {name} cannot be used as a function input"
+                                     f" (causality {fmi.get_causality_str(self._model, name)})")
         self._inputs_fmu = inputs_fmu
 
     def _set_outputs_fmu(self, outputs_fmu):
@@ -369,17 +361,18 @@ class FMUFunction(ot.Function):
         Names of the variable from the fmu to be used as output variables.
         By default assigns variables with FMI causality OUTPUT.
 
-    initialization_script : str (optional)
+    initialization_script : str, default=None
         Path to the initialization script.
 
-    start_time : float
+    start_time : float, default=None
         The FMU simulation start time.
+        The default behavior is to use the default start time defined the FMU.
 
-    final_time : float
-        The output variables value is collected at t=final_time and returned by
-        FMUFunction.
+    final_time : float, default=None
+        The FMU simulation stop time.
+        The default behavior is to use the default stop time defined the FMU.
 
-    kind : str, one of "ME" (model exchange) or "CS"
+    kind : str, one of "ME" (model exchange) or "CS", default=None
         (co-simulation)
         Select a kind of FMU if both are available.
         Note:
@@ -430,15 +423,16 @@ class OpenTURNSFMUFunction(ot.OpenTURNSPythonFunction):
         Names of the variable from the fmu to be used as output variables.
         By default assigns variables with FMI causality OUTPUT.
 
-    initialization_script : str (optional)
+    initialization_script : str, default=None
         Path to the initialization script.
 
-    start_time : float
+    start_time : float, default=None
         The FMU simulation start time.
+        The default behavior is to use the default start time defined the FMU.
 
-    final_time : float
-        The output variables value is collected at t=final_time and returned by
-        FMUFunction.
+    final_time : float, default=None
+        The FMU simulation stop time.
+        The default behavior is to use the default stop time defined the FMU.
 
     kind : str, one of "ME" (model exchange) or "CS" (co-simulation)
         Select a kind of FMU if both are available.
@@ -501,9 +495,11 @@ class FMUPointToFieldFunction(ot.PointToFieldFunction):
     ----------
     path_fmu : str, path to the FMU file.
 
-    mesh : :class:`openturns.Mesh`
-        Time grid, has to be included in the start/end time defined in the FMU.
-        By default it takes into account the start/end time and default step defined the FMU.
+    mesh : :class:`openturns.Mesh`, default=None
+        Time grid of the output variables, has to be included in the start/final time defined in the FMU.
+        By default it takes into account the start/final time and default step defined the FMU.
+        If provided it does not overrides the start/final time of the simulation
+        but returned values are interpolated on the simulation time grid according to the given mesh.
 
     inputs_fmu : Sequence of str, default=None
         Names of the variable from the fmu to be used as input variables.
@@ -513,21 +509,24 @@ class FMUPointToFieldFunction(ot.PointToFieldFunction):
         Names of the variable from the fmu to be used as output variables.
         By default assigns variables with FMI causality OUTPUT.
 
-    initialization_script : str (optional)
+    initialization_script : str, default=None
         Path to the initialization script.
 
-    kind : str, one of "ME" (model exchange) or "CS" (co-simulation)
+    kind : str, default=None
+        Either "ME" (model exchange) or "CS" (co-simulation)
         Select a kind of FMU if both are available.
         Note:
         Contrary to pyfmi, the default here is "CS" (co-simulation). The
         rationale behind this choice is that co-simulation may be used to
         impose a solver not available in pyfmi.
 
-    start_time : float
+    start_time : float, default=None
         The FMU simulation start time.
+        The default behavior is to use the default start time defined the FMU.
 
-    final_time : float
+    final_time : float, default=None
         The FMU simulation stop time.
+        The default behavior is to use the default stop time defined the FMU.
 
     """
 
@@ -607,9 +606,8 @@ class FMUFieldToPointFunction(ot.FieldToPointFunction):
     ----------
     path_fmu : str, path to the FMU file.
 
-    mesh : :class:`openturns.Mesh`
-        Time grid, has to be included in the start/end time defined in the FMU.
-        By default it takes into account the start/end time and default step defined the FMU.
+    mesh : :class:`openturns.Mesh`, default=None
+        Time grid of the input variables, has to be included in the start/final time defined in the FMU.
 
     inputs_fmu : Sequence of str, default=None
         Names of the variable from the fmu to be used as input variables.
@@ -619,21 +617,24 @@ class FMUFieldToPointFunction(ot.FieldToPointFunction):
         Names of the variable from the fmu to be used as output variables.
         By default assigns variables with FMI causality OUTPUT.
 
-    initialization_script : str (optional)
+    initialization_script : str, default=None
         Path to the initialization script.
 
-    kind : str, one of "ME" (model exchange) or "CS" (co-simulation)
+    kind : str, default=None
+        Either "ME" (model exchange) or "CS" (co-simulation)
         Select a kind of FMU if both are available.
         Note:
         Contrary to pyfmi, the default here is "CS" (co-simulation). The
         rationale behind this choice is that co-simulation may be used to
         impose a solver not available in pyfmi.
 
-    start_time : float
+    start_time : float, default=None
         The FMU simulation start time.
+        The default behavior is to use the default start time defined the FMU.
 
-    final_time : float
+    final_time : float, default=None
         The FMU simulation stop time.
+        The default behavior is to use the default stop time defined the FMU.
 
     """
 
@@ -687,6 +688,121 @@ class OpenTURNSFMUFieldToPointFunction(ot.OpenTURNSPythonFieldToPointFunction):
 
         super().__init__(
             self.base.get_input_mesh(), len(self.base.get_inputs_fmu()), len(self.base.get_outputs_fmu())
+        )
+        self.setInputDescription(self.base.get_inputs_fmu())
+        self.setOutputDescription(self.base.get_outputs_fmu())
+
+    def _exec(self, value_input, **kwargs):
+        """Simulate the FMU for a given set of input values.
+
+        Parameters
+        ----------
+        value_input : Vector or array-like with time steps as rows.
+
+        See the 'simulate' method for additional keyword arguments.
+
+        """
+        return self.base.simulate(value_input=value_input, **kwargs)
+
+
+class FMUFieldFunction(ot.FieldFunction):
+    """
+    Define a FieldFunction from a FMU file.
+
+    Parameters
+    ----------
+    path_fmu : str, path to the FMU file.
+
+    input_mesh : :class:`openturns.Mesh`, default=None
+        Time grid of the input variables, has to be included in the start/final time defined in the FMU.
+
+    output_mesh : :class:`openturns.Mesh`, default=None
+        Time grid of the output variables, has to be included in the start/final time defined in the FMU.
+
+    inputs_fmu : Sequence of str, default=None
+        Names of the variable from the fmu to be used as input variables.
+        By default assigns variables with FMI causality INPUT.
+
+    outputs_fmu : Sequence of str, default=None
+        Names of the variable from the fmu to be used as output variables.
+        By default assigns variables with FMI causality OUTPUT.
+
+    initialization_script : str, default=None
+        Path to the initialization script.
+
+    kind : str, default=None
+        Either "ME" (model exchange) or "CS" (co-simulation)
+        Select a kind of FMU if both are available.
+        Note:
+        Contrary to pyfmi, the default here is "CS" (co-simulation). The
+        rationale behind this choice is that co-simulation may be used to
+        impose a solver not available in pyfmi.
+
+    start_time : float, default=None
+        The FMU simulation start time.
+        The default behavior is to use the default start time defined the FMU.
+
+    final_time : float, default=None
+        The FMU simulation stop time.
+        The default behavior is to use the default stop time defined the FMU.
+
+    """
+
+    def __new__(
+        self,
+        path_fmu,
+        input_mesh=None,
+        output_mesh=None,
+        inputs_fmu=None,
+        outputs_fmu=None,
+        kind=None,
+        initialization_script=None,
+        start_time=None,
+        final_time=None,
+    ):
+        lowlevel = OpenTURNSFMUFieldFunction(
+            path_fmu=path_fmu,
+            input_mesh=input_mesh,
+            output_mesh=output_mesh,
+            inputs_fmu=inputs_fmu,
+            outputs_fmu=outputs_fmu,
+            kind=kind,
+            initialization_script=initialization_script,
+            start_time=start_time,
+            final_time=final_time,
+        )
+
+        highlevel = ot.FieldFunction(lowlevel)
+        # highlevel._model = lowlevel.model
+        return highlevel
+
+
+class OpenTURNSFMUFieldFunction(ot.OpenTURNSPythonFieldFunction):
+    """Define a FieldFunction from a FMU file."""
+
+    def __init__(
+        self,
+        path_fmu,
+        input_mesh=None,
+        output_mesh=None,
+        inputs_fmu=None,
+        outputs_fmu=None,
+        initialization_script=None,
+        kind=None,
+        start_time=None,
+        final_time=None,
+        **kwargs
+    ):
+        self.base = _FMUBaseFunction(path_fmu, kind=kind,
+                                     inputs_fmu=inputs_fmu, outputs_fmu=outputs_fmu,
+                                     start_time=start_time, final_time=final_time,
+                                     initialization_script=initialization_script,
+                                     field_input=True, input_mesh=input_mesh,
+                                     output_mesh=output_mesh, field_output=True)
+
+        super().__init__(
+            self.base.get_input_mesh(), len(self.base.get_inputs_fmu()),
+            self.base.get_output_mesh(), len(self.base.get_outputs_fmu())
         )
         self.setInputDescription(self.base.get_inputs_fmu())
         self.setOutputDescription(self.base.get_outputs_fmu())
